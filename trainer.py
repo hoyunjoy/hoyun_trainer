@@ -2,24 +2,29 @@ import pdb
 import torch
 import torch.nn as nn
 import torchaudio
+import importlib
 import argparse
 from DatasetLoader import *
 from torch.utils.data import DataLoader
+from Network import Trainer
 
 parser = argparse.ArgumentParser(description="Hoyun's Trainer")
 
 parser.add_argument('--config',     type=str,   default=None,   help='Config YAML file')
 
 ## Dataset
-parser.add_argument('--train_path',   type=str, default="/mnt/lynx3/datasets/LibriSpeech_wav/train-clean-100/")
-parser.add_argument('--val_path',     type=str, default="/mnt/lynx3/datasets/LibriSpeech_wav/dev-clean")
-parser.add_argumnet('--test_path',    type=str, default="/mnt/lynx3/datasets/LibriSpeech_wav/test-clean")
+parser.add_argument('--train_path',   type=str, default="/mnt/lynx3/datasets/LibriMix/LibriSpeech/train-clean-100/")
+parser.add_argument('--val_path',     type=str, default="/mnt/lynx3/datasets/LibriMix/LibriSpeech/dev-clean/")
+parser.add_argument('--test_path',    type=str, default="/mnt/lynx3/datasets/LibriMix/LibriSpeech/test-clean/")
 parser.add_argument('--sample_rate',  type=str, default=16000)
-parser.add_argument('--ext',          type=str, default='wav')
+parser.add_argument('--ext',          type=str, default='flac')
 
-## Preprocessing
-parser.add_argument('--mel',        dest='mel', action='store_true')
-parser.add_argument('--n_fft',      type=int,   default=256)
+## Data transformation
+parser.add_argument('--n_mel',      type=int,   default=128)
+parser.add_argument('--n_fft',      type=int,   default=1024)
+parser.add_argument('--win_length', type=int,   default=1024)
+parser.add_argument('--hop_length', type=int,   default=512)
+parser.add_argument('--transform',  type=str,   default=None)
 
 ## Data loader
 parser.add_argument('--batch_size',     type=int,   default=64)
@@ -56,42 +61,128 @@ parser.add_argument('--port',   type=str,   default='8888')
 
 args = parser.parse_args()
 
+
+## Pad inputs and labels
+def collate_fn(batch):
+    
+    ## Pad inputs
+    audio_feature_before_pad = [audio_feature for audio_feature, utterance in batch]
+    audio_feature_after_pad  = torch.nn.utils.rnn.pad_sequence(audio_feature_before_pad, batch_first=True)
+    lengths_of_audio_feature = torch.IntTensor([len(audio_feature) for audio_feature in audio_feature_before_pad])
+    
+    ## Pad labels
+    utterance_before_pad = [utterance for audio_feature, utterance in batch]
+    utterance_after_pad = torch.nn.utils.rnn.pad_sequence(utterance_before_pad, batch_first=True)
+    lengths_of_utterance = torch.IntTensor([len(utterance) for utterance in utterance_before_pad])
+    
+    return audio_feature_after_pad, utterance_after_pad, lengths_of_audio_feature, lengths_of_utterance
+
+
+## Find all characters in dataset
+def findAllChar(dataset):
+    
+    char_list = []
+    
+    for idx in range(len(dataset)):
+        sentence = dataset[idx][1]
+        for letter in sentence:
+            
+            if letter in char_list:
+                continue
+            else:
+                char_list.append(letter)
+    
+    return char_list
+
+## Convert all letters to corresponding integers
+def strToInt(sentence):
+    
+    int_list = []
+    
+    for letter in sentence:
+        int_list.append(letter)
+    
+    return int_list
+
 def main():
     
     ## Fix seed
     torch.manual_seed(args.seed)
     
     ## Define datasets
-    train_dataset = train_dataset(vars(args))
-    test_dataset = test_dataset(vars(args))
+    train_set = train_dataset(**vars(args))
+    test_set = test_dataset(**vars(args))
+    
+    ## Find all characters
+    char_list_in_train_set = findAllChar(train_set)
+    print("char_list_in_train_set:", char_list_in_train_set)
+    char_list_in_test_set = findAllChar(test_set)
+    print("char_list_in_test_set:", char_list_in_test_set)
+    
+    char_list = list(set(char_list_in_train_set + char_list_in_test_set)).sort()
+    print("char_list:", char_list)
+    # print(char_list, len(char_list))
+    idx2char = {i:char for i, char in enumerate(char_list)}
+    char2idx = {char:i for i, char in enumerate(char_list)}
     
     ## Define data loaders
     train_loader = DataLoader(
-        dataset=train_dataset,
+        dataset=train_set,
         batch_size=args.batch_size,
         shuffle=True,
         # sampler=train_sampler,
         num_workers=args.num_workers,
+        collate_fn=collate_fn,
         drop_last=True,
     )
     
     ## When training, test loader is val loader
     ## When evaluating, test loader is test loader
     test_loader = DataLoader(
-        dataset=test_dataset,
+        dataset=test_set,
         batch_size=args.batch_size,
         shuffle=False,
         # sampler=test_sampler,
         num_workers=args.num_workers,
+        collate_fn=collate_fn,
         drop_last=True,
     )
     
-    ## Define Model
-    model = MainModel
+    pdb.set_trace();
+    print(train_loader.next())
     
+    ## Define model
+    model = importlib.import_module(args.model).MainModel()
+    
+    ## Define loss function
+    criterion = importlib.import_module(args.loss).LossFunciton()
+    
+    ## Define optimizer
+    optimizer = importlib.import_module(args.optimizer).Optmizer()
+    
+    ## Define scheduler
+    scheduler = importlib.import_module(args.scheduler).Scheduler()
+        
     ## Define Trainer
-    trainer = model.trainer
+    trainer = Trainer(
+        model=model,
+        optimizer=optimizer,
+        criterion=criterion,
+        scheduler=scheduler,
+        train_loader=train_loader,
+        test_loader=test_loader,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+    )
     
+    if args.eval:
+        trainer.evaluate()
+        return
+    
+    for epoch in range(1, args.max_epoch + 1):
+        trainer.train()
+        if epoch % args.test_interval == 0:
+            trainer.evaluate()
     
     
     
