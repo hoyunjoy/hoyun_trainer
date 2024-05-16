@@ -36,10 +36,13 @@ def waveToMelSpec(waveform, sample_rate, n_fft, n_mels, win_length=None, hop_len
 
 class train_dataset(Dataset):
     
-    def __init__(self, train_path, ext, n_fft, transform=None, **kwargs):
+    def __init__(self, train_path, ext, n_fft, n_mels, win_length, hop_length, transform=None, **kwargs):
         self.train_root = Path(train_path)
         self.audio_path_list = [audio_path for audio_path in self.train_root.glob('*/*/*.' + ext)]
         self.n_fft = n_fft
+        self.n_mels = n_mels
+        self.win_length = win_length
+        self.hop_length = hop_length
         self.transform = transform
         
     def __len__(self):
@@ -66,21 +69,32 @@ class train_dataset(Dataset):
         
         ## Transform audio
         if self.transform=='spec':
-            spec = waveToSpec(waveform)
+            spec = waveToSpec(waveform=waveform.detach(),
+                              n_fft=self.n_fft,
+                              win_length=self.win_length,
+                              hop_length=self.hop_length)
             return spec, utterance
         
         elif self.transform=='melspec':
-            melspec = waveToMelSpec
-            return melspec, utterance
+            melspec = waveToMelSpec(waveform=waveform.detach(),
+                                    sample_rate=sample_rate,
+                                    n_fft=self.n_fft,
+                                    n_mels=self.n_mels,
+                                    win_length=self.win_length,
+                                    hop_length=self.hop_length)
+            return melspec.squeeze(0), utterance
         
-        return waveform, utterance
+        return waveform.detach(), utterance
         
 class test_dataset(Dataset):
     
-    def __init__(self, test_path, ext, n_fft, transform=None, **kwargs):
+    def __init__(self, test_path, ext, n_fft, n_mels, win_length, hop_length, transform=None, **kwargs):
         self.test_root = Path(test_path)
         self.audio_path_list = [audio_path for audio_path in self.test_root.glob('*/*/*.' + ext)]
         self.n_fft = n_fft
+        self.n_mels = n_mels
+        self.win_length = win_length
+        self.hop_length = hop_length
         self.transform = transform
         
     def __len__(self):
@@ -108,11 +122,19 @@ class test_dataset(Dataset):
         
         ## Transform audio
         if self.transform=='spec':
-            spec = waveToSpec(waveform)
-            return spec, utterance
+            spec = waveToSpec(waveform=waveform,
+                              n_fft=self.n_fft,
+                              win_length=self.win_length,
+                              hop_length=self.hop_length)
+            return spec.squeeze(0), utterance
         
         elif self.transform=='melspec':
-            melspec = waveToMelSpec
+            melspec = waveToMelSpec(waveform=waveform,
+                                    sample_rate=sample_rate,
+                                    n_fft=self.n_fft,
+                                    n_mels=self.n_mels,
+                                    win_length=self.win_length,
+                                    hop_length=self.hop_length)
             return melspec, utterance
         
         return waveform, utterance

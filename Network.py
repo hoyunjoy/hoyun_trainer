@@ -3,56 +3,62 @@ import torch
 import torch.nn as nn
 import importlib
 
-# class Network():
+class Network():
+
+    def __init__(self, model, loss, optimizer, scheduler, **kwargs):
+            
+        ## Define model
+        self.__M__ = importlib.import_module('model.' + model).MainModel(**kwargs)
+        
+        ## Define loss function
+        self.__L__ = importlib.import_module('loss.' + loss).LossFunction(**kwargs)
+        
+        ## Define optimizer
+        self.__Optimizer__ = importlib.import_module('optimizer.' + optimizer).Optimizer(self.__M__.parameters(), **kwargs)
+        
+        ## Define scheduler
+        self.__Scheduler__ = importlib.import_module('scheduler.' + scheduler).Scheduler(self.__Optimizer__, **kwargs)
+            
     
-#     def __init__(self, **kwargs):
-#         self.__M__ = importlib.import_module(model).MainModel()
-#         self.__L__ = importlib.import_module(loss_function).LossFunction()
-#         self.__Optimizer__ = importlib.import_module(optimizer).Optimizer()
-#         self.__Scheduler__ = importlib.import_module(scheduler).Scheduler()
-    
-#     def forward(self, inputs):
-#         outputs = self.__M__(inputs)
-#         loss = self.__L__(outputs)
+    def forward(self, inputs):
+        outputs = self.__M__(inputs)
+        loss = self.__L__(outputs)
+        
+        return loss
 
 class Trainer():
     
-    def __init__(self, model, optimizer, criterion, scheduler, train_loader, test_loader, lr, weight_decay, **kwargs):
+    def __init__(self, network, train_loader, test_loader, **kwargs):
         
-        self.model = model
-        self.optimizer = optimizer
-        self.criterion = criterion
-        self.scheduler = scheduler
+        self.network = network
         self.train_loader = train_loader
         self.test_loader = test_loader
-        self.lr = lr
-        self.weight_decay = weight_decay
         
     
     def train(self):
         
-        self.model.train()
-            
+        self.network.__M__.train()
+        
         total_loss = 0
-            
+        
         for (inputs, labels, lengths_of_inputs, lengths_of_labels) in self.train_loader:
         
-            self.optimizer.zero_grad()
-            pred = self.model(inputs)
-            loss = self.criterion(pred, targets)
+            self.network.__Optimizer__.zero_grad()
+            pred = self.network.__M__(inputs)
+            loss = self.network.__L__(pred, labels, lengths_of_inputs, lengths_of_labels)
             total_loss += loss
             loss.backward()
-            self.optimizer.step()
+            self.network.__Optimizer__.step()
             
             ## if scheduler updates per batch
-            if self.scheduler.per_batch:
+            if self.scheduler.lr_step == 'batch':
                 self.scheduler.step()
         
         total_loss /= len(self.train_loader)
         
-        print("train loss: {.6f}".format(loss))
+        print("train loss: {.6f}".format(total_loss))
         
-        if not self.scheduler.per_batch:
+        if self.scheduler.lr_step == 'epoch':
             self.scheduler.step()
 
     def evaluate(self):
