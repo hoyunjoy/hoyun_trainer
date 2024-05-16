@@ -3,9 +3,11 @@ import torch
 import torch.nn as nn
 import importlib
 
-class Network():
+class Network(nn.Module):
 
     def __init__(self, model, loss, optimizer, scheduler, **kwargs):
+        
+        super(Network, self).__init__()
             
         ## Define model
         self.__M__ = importlib.import_module('model.' + model).MainModel(**kwargs)
@@ -20,9 +22,9 @@ class Network():
         self.__Scheduler__ = importlib.import_module('scheduler.' + scheduler).Scheduler(self.__Optimizer__, **kwargs)
             
     
-    def forward(self, inputs):
-        outputs = self.__M__(inputs)
-        loss = self.__L__(outputs)
+    def forward(self, inputs, labels, lengths_of_inputs, lengths_of_labels):
+        preds = self.__M__(inputs)
+        loss = self.__L__(preds, labels, lengths_of_inputs, lengths_of_labels)
         
         return loss
 
@@ -42,36 +44,48 @@ class Trainer():
         total_loss = 0
         
         for (inputs, labels, lengths_of_inputs, lengths_of_labels) in self.train_loader:
+            
+            ## Move tensors to CUDA
+            inputs = inputs.cuda()
+            labels = labels.cuda()
+            lengths_of_inputs = lengths_of_inputs.cuda()
+            lengths_of_labels = lengths_of_labels.cuda()
         
             self.network.__Optimizer__.zero_grad()
-            pred = self.network.__M__(inputs)
-            loss = self.network.__L__(pred, labels, lengths_of_inputs, lengths_of_labels)
-            total_loss += loss
+            loss = self.network(inputs, labels, lengths_of_inputs, lengths_of_labels)
+            total_loss += loss.item()
             loss.backward()
             self.network.__Optimizer__.step()
             
             ## if scheduler updates per batch
-            if self.scheduler.lr_step == 'batch':
-                self.scheduler.step()
+            if self.network.__Scheduler__[1] == 'batch':
+                self.network.__Scheduler__[0].step()
         
         total_loss /= len(self.train_loader)
         
-        print("train loss: {.6f}".format(total_loss))
+        print("train loss: {:.6f}".format(total_loss))
         
-        if self.scheduler.lr_step == 'epoch':
-            self.scheduler.step()
+        if self.network.__Scheduler__[1] == 'epoch':
+            self.network.__Scheduler__[0].step()
 
     def evaluate(self):
         
-        self.model.eval()
+        self.model.__M__.eval()
         
         total_loss = 0
         
         with torch.no_grad():
-            for (inputs, targets) in self.test_loader:
+            for (inputs, labels, lengths_of_inputs, lengths_of_labels) in self.test_loader:
                 
-                pred = self.model(inputs)
-                total_loss += self.criterion(pred, targets)
+                ## Move tensors to CUDA
+                inputs = inputs.cuda()
+                labels = labels.cuda()
+                lengths_of_inputs = lengths_of_inputs.cuda()
+                lengths_of_labels = lengths_of_labels.cuda()
+                
+                loss = self.network(inputs, labels, lengths_of_inputs, lengths_of_labels)
+                total_loss += loss.item()
             
-            total_loss /= len(self.test_loader)
-            print("test loss: {.6f}".format(total_loss))
+        total_loss /= len(self.test_loader)
+        
+        print("test loss: {:.6f}".format(total_loss))

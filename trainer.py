@@ -159,7 +159,7 @@ def main():
         drop_last=True,
     )
     
-    speaker_recognition_net = Network(**vars(args))
+    speaker_recognition_net = Network(**vars(args)).cuda()
         
     ## Define Trainer
     trainer = Trainer(network=speaker_recognition_net,

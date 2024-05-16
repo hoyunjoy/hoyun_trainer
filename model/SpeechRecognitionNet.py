@@ -41,12 +41,14 @@ class SpeechRecognitionNet(nn.Module):
         
         # inputs.shape: [batch, n_mels, time]
         
-        x = self.sequential(inputs)     # -> [batch, n_mels, time]
+        x = self.sequential(inputs)         # -> [batch, n_mels, time]
         batch, n_mels, time = x.shape
-        x = x.permute(0, 2, 1)          # -> [batch, time, n_mels]
-        x, _ = self.lstm(x)             # -> [batch, time, n_mels]
-        x = self.fc(x)                  # -> [batch, time, 29]
-        outputs = self.log_softmax(x)   # -> [batch, time, 29]
+        x = x.permute(0, 2, 1)              # -> [batch, time, n_mels]
+        x, _ = self.lstm(x)                 # -> [batch, time, n_mels]
+        x = self.fc(x)                      # -> [batch, time, 29]
+        outputs = self.log_softmax(x)       # -> [batch, time, 29]
+        ## Change outputs shape to use CTCLoss
+        outputs = outputs.permute(1, 0, 2)  # -> [time, batch, 29]
         
         return outputs
 
