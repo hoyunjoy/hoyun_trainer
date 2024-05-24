@@ -8,6 +8,7 @@ from DatasetLoader import *
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 from Network import *
+from utils import *
 
 parser = argparse.ArgumentParser(description="Hoyun's Trainer")
 
@@ -45,8 +46,8 @@ parser.add_argument('--lr_decay',       type=float, default=0.9)
 parser.add_argument('--weight_decay',   type=float, default=0)
 
 ## Load and save
-parser.add_argument('--initial_model',  type=str,   default="")
-parser.add_argument('--save_path',      type=str)
+parser.add_argument('--initial_model',  type=str,   default="./exps/exp1/model0015.pt")
+parser.add_argument('--save_path',      type=str,   default="./exps/exp1/")
 
 ## Model
 parser.add_argument('--model',  type=str,   default='SpeechRecognitionNet')
@@ -67,18 +68,18 @@ def collate_fn(batch):
     
     ## Pad inputs
     ## input shape of pad_sequence: [batch, time, *] if batch_first=True
-    audio_feature_before_pad = [audio_feature.transpose(0, 1) for audio_feature, utterance in batch] # -> [n_mels, time]
-    audio_feature_after_pad  = pad_sequence(audio_feature_before_pad, batch_first=True).transpose(1, 2) # -> [time, n_mels]
+    audio_before_pad = [audio.transpose(0, 1) for audio, utterance in batch]            # -> [batch, n_mels, time]
+    audio_after_pad  = pad_sequence(audio_before_pad, batch_first=True).transpose(1, 2) # -> [batch, time, n_mels]
     
-    lengths_of_audio_feature = torch.IntTensor([len(audio_feature) for audio_feature in audio_feature_before_pad])
+    lengths_of_audio = torch.IntTensor([len(audio) for audio in audio_before_pad])
     
     ## Pad labels
-    utterance_before_pad = [strToInt(utterance, char2idx) for audio_feature, utterance in batch]
+    utterance_before_pad = [strToInt(utterance, char2idx) for audio, utterance in batch]
     utterance_after_pad = pad_sequence(utterance_before_pad, batch_first=True)
     
     lengths_of_utterance = torch.IntTensor([len(utterance) for utterance in utterance_before_pad])
     
-    return audio_feature_after_pad, utterance_after_pad, lengths_of_audio_feature, lengths_of_utterance
+    return audio_after_pad, utterance_after_pad, lengths_of_audio, lengths_of_utterance
 
 
 ## Find all characters in dataset
@@ -97,15 +98,7 @@ def findAllChar(dataset):
     
     return sorted(char_list)
 
-## Convert all letters to corresponding integers
-def strToInt(sentence, char2idx):
-    
-    int_list = []
-    
-    for letter in sentence:
-        int_list.append(char2idx[letter])
-    
-    return torch.IntTensor(int_list)
+
 
 def main():
     
@@ -115,27 +108,14 @@ def main():
     ## Define datasets
     train_set = train_dataset(**vars(args))
     test_set = test_dataset(**vars(args))
-
+    
     # Execute this only at first
     # ## Find all characters
     # char_list = findAllChar(train_set)
     # char_list_2 = findAllChar(test_set)
     
     # assert char_list == char_list_2
-    
-    char_list = [' ', "'", 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-                 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-                 'W', 'X', 'Y', 'Z']
-    
-    ## Put blank in the first place
-    char_list.insert(0, '-')
-    
-    ## Make dictionary between characters and indices
-    global idx2char, char2idx
-    
-    idx2char = {i:char for i, char in enumerate(char_list)}
-    char2idx = {char:i for i, char in enumerate(char_list)}
-    
+        
     ## Define data loaders
     train_loader = DataLoader(
         dataset=train_set,
@@ -167,6 +147,8 @@ def main():
                       test_loader=test_loader,
                       **vars(args))
     
+    trainer.loadParameters()
+    
     if args.eval:
         trainer.evaluate()
         return
@@ -174,7 +156,9 @@ def main():
     for epoch in range(1, args.max_epoch + 1):
         trainer.train()
         if epoch % args.test_interval == 0:
+        
             trainer.evaluate()
+            trainer.saveParameters(epoch)
     
     
     

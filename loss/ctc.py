@@ -7,7 +7,7 @@ class LossFunction(nn.Module):
         
         super(LossFunction, self).__init__()
         
-        self.criterion = torch.nn.CTCLoss(blank=0)
+        self.criterion = torch.nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
         
         print('Initialized CTC Loss')
 

@@ -44,13 +44,14 @@ class train_dataset(Dataset):
         self.win_length = win_length
         self.hop_length = hop_length
         self.transform = transform
+        self.ext = ext
         
     def __len__(self):
         return len(self.audio_path_list)
         
     def __getitem__(self, idx):
         parent = self.audio_path_list[idx].parent
-        audio_file_name = self.audio_path_list[idx].name
+        audio_file_name, _ = self.audio_path_list[idx].name.split('.')
         first, second, third = audio_file_name.split('-')
         
         ## Load text(GT)
@@ -69,22 +70,22 @@ class train_dataset(Dataset):
         
         ## Transform audio
         if self.transform=='spec':
-            spec = waveToSpec(waveform=waveform.detach(),
+            spec = waveToSpec(waveform=waveform,
                               n_fft=self.n_fft,
                               win_length=self.win_length,
                               hop_length=self.hop_length)
-            return spec, utterance
+            return spec.squeeze(0), utterance
         
         elif self.transform=='melspec':
-            melspec = waveToMelSpec(waveform=waveform.detach(),
+            melspec = waveToMelSpec(waveform=waveform,
                                     sample_rate=sample_rate,
                                     n_fft=self.n_fft,
                                     n_mels=self.n_mels,
                                     win_length=self.win_length,
                                     hop_length=self.hop_length)
-            return melspec.squeeze(0), utterance
+            return melspec.squeeze(0), utterance # [n_mels, time]
         
-        return waveform.detach(), utterance
+        return waveform, utterance
         
 class test_dataset(Dataset):
     
@@ -102,7 +103,7 @@ class test_dataset(Dataset):
         
     def __getitem__(self, idx):
         parent = self.audio_path_list[idx].parent
-        audio_file_name = self.audio_path_list[idx].name
+        audio_file_name, _ = self.audio_path_list[idx].name.split('.')
         first, second, third = audio_file_name.split('-')
         
         ## Load text(GT)
@@ -135,6 +136,6 @@ class test_dataset(Dataset):
                                     n_mels=self.n_mels,
                                     win_length=self.win_length,
                                     hop_length=self.hop_length)
-            return melspec, utterance
+            return melspec.squeeze(0), utterance # [n_mels, time]
         
         return waveform, utterance

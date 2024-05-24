@@ -6,6 +6,6 @@ def Scheduler(optimizer, test_interval, max_epoch, lr_decay, **kwargs):
     
     lr_step = 'epoch'
     
-    print('Initialized StepLR scheduler')
+    print('Initialized StepLR Scheduler')
     
     return scheduler_function, lr_step
