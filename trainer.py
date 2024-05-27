@@ -1,4 +1,5 @@
 import pdb
+import json
 import torch
 import torch.nn as nn
 import torchaudio
@@ -12,7 +13,7 @@ from utils import *
 
 parser = argparse.ArgumentParser(description="Hoyun's Trainer")
 
-parser.add_argument('--config',     type=str,   default=None,   help='Config YAML file')
+parser.add_argument('--config',     type=str,   default=None,   help='Config JSON file')
 
 ## Dataset
 parser.add_argument('--train_path',   type=str, default="/mnt/lynx3/datasets/LibriMix/LibriSpeech/train-clean-100/")
@@ -35,7 +36,7 @@ parser.add_argument('--num_workers',    type=int,   default=5)
 
 ## Training Details
 parser.add_argument('--test_interval',  type=int,   default=5)
-parser.add_argument('--max_epoch',      type=int,   default=100)
+parser.add_argument('--max_epoch',      type=int,   default=300)
 parser.add_argument('--loss',           type=str,   default='ctc')
 
 ## Optimizer
@@ -46,7 +47,7 @@ parser.add_argument('--lr_decay',       type=float, default=0.9)
 parser.add_argument('--weight_decay',   type=float, default=0)
 
 ## Load and save
-parser.add_argument('--initial_model',  type=str,   default="./exps/exp1/model0015.pt")
+parser.add_argument('--initial_model',  type=str,   default="./exps/exp1/model025.pt")
 parser.add_argument('--save_path',      type=str,   default="./exps/exp1/")
 
 ## Model
@@ -62,6 +63,17 @@ parser.add_argument('--distributed',    dest='distributed', action='store_true')
 parser.add_argument('--port',   type=str,   default='8888')
 
 args = parser.parse_args()
+
+def load_json():
+    with open(args.config, 'r') as f:
+        data = json.load(f)
+        
+    args_keys = vars(args).keys()
+
+    for key, value in data.items():
+        if key not in args_keys:
+            raise AttributeError(f"Key '{key}' is not a valid argument.")
+        setattr(args, key, value)
 
 ## Pad inputs and labels
 def collate_fn(batch):
@@ -165,4 +177,5 @@ def main():
     
 
 if __name__ == "__main__":
+    load_json()
     main()

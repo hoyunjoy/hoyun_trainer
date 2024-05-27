@@ -19,7 +19,10 @@ def usedLengthForCtcCal(ratio, lengths_of_audio):
     return used_length_for_ctc_cal
 
 def removeBlanks(sentence):
+    
+    ## Initialize new sentence
     new_sentence = ""
+    
     for letter in sentence:
         if letter == "-":
             continue
@@ -27,6 +30,26 @@ def removeBlanks(sentence):
             new_sentence += letter
     
     return new_sentence
+
+def removeBlanksAndRepetition(sentence):
+    
+    ## Initialize new sentence and previous letter
+    new_sentence = ""
+    previous_letter = "@" # "@" cannot be in the sentence
+    
+    for letter in sentence:
+        if previous_letter == letter:
+            continue
+        elif letter == "-":
+            previous_letter = letter
+        else:
+            new_sentence += letter
+            previous_letter = letter
+    
+    return new_sentence
+
+def WordErrorRate(sentence):
+    
 
 class Network(nn.Module):
 
@@ -146,15 +169,32 @@ class Trainer():
                 preds = preds.permute(1, 0, 2)      # -> [batch, time, 29]
                 preds = torch.argmax(preds, dim=2)  # -> [batch, time]
                 
-                predicted_sentence = []
-                for ii in range(preds.size(0)):
-                    predicted_sentence.append(removeBlanks(intToStr(preds[ii], idx2char)))
+                with open(self.save_path + "/result" + ".txt", 'a') as f:
+                # with open(self.save_path + "/result2" + ".txt", 'a') as f:
+                    
+                    for ii in range(preds.size(0)):
+                        
+                        ## Write labels
+                        string_label = intToStr(labels[ii], idx2char)
+                        blank_removed_label = removeBlanks(string_label)
+                        f.write("Label     : " + blank_removed_label + "\n")
+                        
+                        ## Write predictions
+                        string_prediction = intToStr(preds[ii], idx2char)
+                        # blank_removed_prediction = removeBlanks(string_prediction)
+                        blank_removed_prediction = removeBlanksAndRepetition(string_prediction)
+                        f.write("Prediction: " + blank_removed_prediction + "\n\n")
+                    
+                
+                # predicted_sentence = []
+                # for ii in range(preds.size(0)):
+                #     predicted_sentence.append(removeBlanks(intToStr(preds[ii], idx2char)))
 
         total_loss /= len(self.test_loader)
         print("test loss: {:.6f}".format(total_loss))
         
-        print("label     : {}".format(removeBlanks(intToStr(labels[-1], idx2char))))
-        print("prediction: {}".format(predicted_sentence[-1]))
+        # print("label     : {}".format(removeBlanks(intToStr(labels[-1], idx2char))))
+        # print("prediction: {}".format(predicted_sentence[-1]))
 
         
     def saveParameters(self, epoch):

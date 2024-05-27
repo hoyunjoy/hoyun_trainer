@@ -1,3 +1,4 @@
 {
-    "initial_model": "./exps/exp1/model300.pt"
+    "initial_model": "./exps/exp1/model300.pt",
+    "eval": "True"
 }
