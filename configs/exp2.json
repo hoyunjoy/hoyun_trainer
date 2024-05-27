@@ -1,0 +1,5 @@
+{
+    "initial_model": null,
+    "eval": false,
+    "save_path": "./exps/exp2/"
+}

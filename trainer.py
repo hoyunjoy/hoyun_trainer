@@ -159,17 +159,20 @@ def main():
                       test_loader=test_loader,
                       **vars(args))
     
-    trainer.loadParameters()
+    os.makedirs(args.save_path, exist_ok=True)
+    
+    if args.initial_model != None:
+        trainer.loadParameters()
     
     if args.eval:
         trainer.evaluate()
         return
     
     for epoch in range(1, args.max_epoch + 1):
-        trainer.train()
+        trainer.train(epoch)
         if epoch % args.test_interval == 0:
         
-            trainer.evaluate()
+            trainer.evaluate(epoch)
             trainer.saveParameters(epoch)
     
     

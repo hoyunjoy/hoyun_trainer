@@ -3,6 +3,7 @@ import pdb
 import torch
 import torch.nn as nn
 import importlib
+import jiwer
 from utils import *
 from tqdm import tqdm
 from trainer import intToStr, idx2char
@@ -48,8 +49,7 @@ def removeBlanksAndRepetition(sentence):
     
     return new_sentence
 
-def WordErrorRate(sentence):
-    
+
 
 class Network(nn.Module):
 
@@ -88,7 +88,7 @@ class Trainer():
         self.initial_model  = initial_model 
         
     
-    def train(self):
+    def train(self, epoch):
         
         self.network.__M__.train()
         
@@ -128,16 +128,19 @@ class Trainer():
         
         total_loss /= len(self.train_loader)
         
-        print("train loss: {:.6f}".format(total_loss))
+        print("epoch: {:3d} train loss: {:.3f}".format(epoch, total_loss))
         
         if self.network.__Scheduler__[1] == 'epoch':
             self.network.__Scheduler__[0].step()
 
-    def evaluate(self):
+    def evaluate(self, epoch=None):
         
         self.network.__M__.eval()
         
         total_loss = 0
+        
+        AVG_WER = 0
+        counter = 0
         
         with torch.no_grad():
             for (inputs, labels, lengths_of_inputs, lengths_of_labels) in tqdm(self.test_loader):
@@ -169,33 +172,40 @@ class Trainer():
                 preds = preds.permute(1, 0, 2)      # -> [batch, time, 29]
                 preds = torch.argmax(preds, dim=2)  # -> [batch, time]
                 
-                with open(self.save_path + "/result" + ".txt", 'a') as f:
-                # with open(self.save_path + "/result2" + ".txt", 'a') as f:
+                with open(self.save_path + "script" + ".txt", 'a') as f:
                     
                     for ii in range(preds.size(0)):
                         
                         ## Write labels
+                        ## Padded zero converted to blanks
                         string_label = intToStr(labels[ii], idx2char)
                         blank_removed_label = removeBlanks(string_label)
                         f.write("Label     : " + blank_removed_label + "\n")
                         
                         ## Write predictions
                         string_prediction = intToStr(preds[ii], idx2char)
-                        # blank_removed_prediction = removeBlanks(string_prediction)
                         blank_removed_prediction = removeBlanksAndRepetition(string_prediction)
                         f.write("Prediction: " + blank_removed_prediction + "\n\n")
-                    
-                
-                # predicted_sentence = []
-                # for ii in range(preds.size(0)):
-                #     predicted_sentence.append(removeBlanks(intToStr(preds[ii], idx2char)))
+                        
+                        WER = jiwer.wer(blank_removed_label, blank_removed_prediction)
+                        AVG_WER += WER
+                        counter += 1
 
+        AVG_WER /= counter
         total_loss /= len(self.test_loader)
-        print("test loss: {:.6f}".format(total_loss))
         
-        # print("label     : {}".format(removeBlanks(intToStr(labels[-1], idx2char))))
-        # print("prediction: {}".format(predicted_sentence[-1]))
+        ## Only when evaluating
+        if epoch == None:
+            print("average WER: {:.3f} test loss: {:.3f}".format(AVG_WER, total_loss))
+            return
 
+        ## Only when training       
+        if epoch != None:
+            print("epoch: {:3d} average WER: {:.3f} val loss: {:.3f}".format(epoch, AVG_WER, total_loss))
+            
+            with open(self.save_path + "/result" + ".txt", 'a') as f:
+                f.write("epoch: {:3d} average WER: {:.3f} val loss: {:.3f}".format(epoch, AVG_WER, total_loss))
+            
         
     def saveParameters(self, epoch):
         
